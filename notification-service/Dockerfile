@@ -1,23 +1,9 @@
-FROM node:24-alpine AS builder
+FROM eclipse-temurin:21-jdk
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY target/*.jar app.jar
 
-RUN npm ci
+EXPOSE 8080
 
-COPY . .
-
-RUN npm test
-
-RUN npm prune --omit=dev
-
-FROM node:24-alpine
-
-WORKDIR /app
-
-COPY --from=builder /app .
-
-EXPOSE 3000
-
-CMD ["node","server.js"]
+ENTRYPOINT ["java","-jar","app.jar"]
