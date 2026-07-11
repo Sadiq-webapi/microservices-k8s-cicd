@@ -67,8 +67,8 @@ def buildService(String serviceName) {
     echo "--- Processing ${serviceName} ---"
     
     echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
-    // Added -U to force-update and clear out cached repository transfer failures
-    sh "mvn -f ${serviceName}/pom.xml clean verify -U"
+    // Fixes 'Unable to find main class' by building from root using module targets
+    sh "mvn clean verify -pl :${serviceName} -am -U"
     
     String imageTag = "${REGISTRY_URL}/${serviceName}:${env.COMMIT_SHA}"
     String latestTag = "${REGISTRY_URL}/${serviceName}:latest"
