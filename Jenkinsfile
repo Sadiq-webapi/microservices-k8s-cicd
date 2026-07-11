@@ -59,14 +59,14 @@ pipeline {
             emailext body: "Something went wrong during the build phase. Investigation required: ${env.BUILD_URL}", subject: "FAILED: ${env.JOB_NAME}", to: 'admin@yourcompany.com'
         }
     }
-} // This properly terminates the pipeline block
+}
 
 def buildService(String serviceName) {
     echo "--- Processing ${serviceName} ---"
     
-    // 1 & 2. Build, Compile, and Unit Test via Maven
+    // 1 & 2. Build, Compile, and Unit Test via the main root pom.xml targeting the specific module
     echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
-    sh "mvn -f ${serviceName}/pom.xml clean verify"
+    sh "mvn clean verify -pl :${serviceName} -am"
     
     // 3. Docker Build Stage
     String imageTag = "${REGISTRY_URL}/${serviceName}:${env.COMMIT_SHA}"
