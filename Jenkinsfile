@@ -6,6 +6,8 @@ pipeline {
         AWS_REGION     = 'ap-south-2' // Hyderabad region
         REGISTRY_URL   = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         COMMIT_SHA     = '' 
+        // Ensures Jenkins can find your system's Maven installation paths
+        PATH           = "/usr/bin:/usr/local/bin:${env.PATH}"
     }
     
     options {
@@ -65,13 +67,14 @@ def buildService(String serviceName) {
     echo "--- Processing ${serviceName} ---"
     
     echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
-    sh "mvn clean verify -pl :${serviceName} -am"
+    // Added -U to force-update and clear out cached repository transfer failures
+    sh "mvn -f ${serviceName}/pom.xml clean verify -U"
     
     String imageTag = "${REGISTRY_URL}/${serviceName}:${env.COMMIT_SHA}"
     String latestTag = "${REGISTRY_URL}/${serviceName}:latest"
     
     echo "Building container images for ${serviceName}..."
-    def appImage = docker.build(imageTag, "-f ./infra/docker/${serviceName}/Dockerfile .")
+    sh "docker build -t ${imageTag} -f ./infra/docker/${serviceName}/Dockerfile ."
     
     echo "Scanning ${serviceName} image for critical vulnerabilities..."
     sh "trivy image --exit-code 1 --severity CRITICAL --no-progress ${imageTag}"
