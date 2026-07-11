@@ -5,11 +5,10 @@ pipeline {
         AWS_ACCOUNT_ID = '385936845313'
         AWS_REGION     = 'ap-south-2' // Hyderabad region
         REGISTRY_URL   = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-        // Fixed: Use placeholder here, we evaluate it cleanly inside the first stage
         COMMIT_SHA     = '' 
     }
     
-   options {
+    options {
         timeout(time: 1, unit: 'HOURS')
     }
     
@@ -19,7 +18,6 @@ pipeline {
                 cleanWs()
                 checkout scm
                 script {
-                    // Cleanly evaluate and set environment variable inside a script block
                     env.COMMIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
                 }
             }
@@ -51,7 +49,7 @@ pipeline {
         }
     }
     
-  post {
+    post {
         success {
             slackSend tokenCredentialId: 'slack-token', channel: '#cicd-alerts', color: 'good', message: "SUCCESS: Job '${env.JOB_NAME}' [${env.BUILD_NUMBER}] completed successfully! (${env.BUILD_URL})"
             emailext body: "The pipeline executed flawlessly. Check out details here: ${env.BUILD_URL}", subject: "SUCCESS: ${env.JOB_NAME}", to: 'admin@yourcompany.com'
@@ -61,15 +59,13 @@ pipeline {
             emailext body: "Something went wrong during the build phase. Investigation required: ${env.BUILD_URL}", subject: "FAILED: ${env.JOB_NAME}", to: 'admin@yourcompany.com'
         }
     }
-    }
-}
+} // This properly terminates the pipeline block
 
 def buildService(String serviceName) {
     echo "--- Processing ${serviceName} ---"
     
     // 1 & 2. Build, Compile, and Unit Test via Maven
     echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
-    // This executes your clean maven verification step inside each service subdirectory
     sh "mvn -f ${serviceName}/pom.xml clean verify"
     
     // 3. Docker Build Stage
