@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  user-service:
+    build: ./user-service
+    ports:
+      - "3000:3001"
+    environment:
+      - NODE_ENV=development
+
+  order-service:
+    build: ./order-service
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+
+  payment-service:
+    build: ./payment-service
+    ports:
+      - "3002:3000"
+    environment:
+      - NODE_ENV=development
+
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "3003:3000"
+    environment:
+      - NODE_ENV=development
