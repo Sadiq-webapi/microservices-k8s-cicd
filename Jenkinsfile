@@ -2,10 +2,11 @@ pipeline {
     agent any
     
     environment {
-        AWS_ACCOUNT_ID = '385936845313' // Replace with your AWS Account ID
-        AWS_REGION     = 'ap-south-2'           // Change if using another region
+        AWS_ACCOUNT_ID = '385936845313'
+        AWS_REGION     = 'ap-south-2' // Hyderabad region
         REGISTRY_URL   = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-        COMMIT_SHA     = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+        // Fixed: Use placeholder here, we evaluate it cleanly inside the first stage
+        COMMIT_SHA     = '' 
     }
     
     options {
@@ -18,6 +19,10 @@ pipeline {
             steps {
                 cleanWs()
                 checkout scm
+                script {
+                    // Cleanly evaluate and set environment variable inside a script block
+                    env.COMMIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                }
             }
         }
         
@@ -62,15 +67,13 @@ pipeline {
 def buildService(String serviceName) {
     echo "--- Processing ${serviceName} ---"
     
-    // 1. Build / Compile Stage (Simulated or custom framework specific test task)
-    echo "Compiling and packaging dependencies for ${serviceName}..."
-    
-    // 2. Unit Test Stage
-    echo "Running Unit Test suites for ${serviceName}..."
-    // sh "cd ${serviceName} && npm test" OR "mvn test" (Uncomment and add your direct test executable here)
+    // 1 & 2. Build, Compile, and Unit Test via Maven
+    echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
+    // This executes your clean maven verification step inside each service subdirectory
+    sh "mvn -f ${serviceName}/pom.xml clean verify"
     
     // 3. Docker Build Stage
-    String imageTag = "${REGISTRY_URL}/${serviceName}:${COMMIT_SHA}"
+    String imageTag = "${REGISTRY_URL}/${serviceName}:${env.COMMIT_SHA}"
     String latestTag = "${REGISTRY_URL}/${serviceName}:latest"
     
     echo "Building container images for ${serviceName}..."
