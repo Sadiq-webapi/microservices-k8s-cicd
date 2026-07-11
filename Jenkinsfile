@@ -2,15 +2,14 @@ pipeline {
     agent any
     
     environment {
-        AWS_ACCOUNT_ID = '385936845313' // Replace with your AWS Account ID
-        AWS_REGION     = 'ap-south-2'           // Change if using another region
+        AWS_ACCOUNT_ID = '385936845313'
+        AWS_REGION     = 'ap-south-2' // Hyderabad region
         REGISTRY_URL   = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-        COMMIT_SHA     = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+        COMMIT_SHA     = '' 
     }
     
     options {
         timeout(time: 1, unit: 'HOURS')
-        ansiColor('xterm')
     }
     
     stages {
@@ -18,6 +17,9 @@ pipeline {
             steps {
                 cleanWs()
                 checkout scm
+                script {
+                    env.COMMIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                }
             }
         }
         
@@ -49,11 +51,11 @@ pipeline {
     
     post {
         success {
-            slackSend channel: '#cicd-alerts', color: 'good', message: "SUCCESS: Job '${env.JOB_NAME}' [${env.BUILD_NUMBER}] completed successfully! (${env.BUILD_URL})"
+            slackSend tokenCredentialId: 'slack-token', channel: '#cicd-alerts', color: 'good', message: "SUCCESS: Job '${env.JOB_NAME}' [${env.BUILD_NUMBER}] completed successfully! (${env.BUILD_URL})"
             emailext body: "The pipeline executed flawlessly. Check out details here: ${env.BUILD_URL}", subject: "SUCCESS: ${env.JOB_NAME}", to: 'admin@yourcompany.com'
         }
         failure {
-            slackSend channel: '#cicd-alerts', color: 'danger', message: "FAILURE: Job '${env.JOB_NAME}' [${env.BUILD_NUMBER}] failed during execution. (${env.BUILD_URL})"
+            slackSend tokenCredentialId: 'slack-token', channel: '#cicd-alerts', color: 'danger', message: "FAILURE: Job '${env.JOB_NAME}' [${env.BUILD_NUMBER}] failed during execution. (${env.BUILD_URL})"
             emailext body: "Something went wrong during the build phase. Investigation required: ${env.BUILD_URL}", subject: "FAILED: ${env.JOB_NAME}", to: 'admin@yourcompany.com'
         }
     }
@@ -62,15 +64,14 @@ pipeline {
 def buildService(String serviceName) {
     echo "--- Processing ${serviceName} ---"
     
-    // 1. Build / Compile Stage (Simulated or custom framework specific test task)
-    echo "Compiling and packaging dependencies for ${serviceName}..."
+    // 1 & 2. Run Maven inside the specific service directory using the local pom.xml
+    echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
+    dir("${serviceName}") {
+        sh "mvn clean verify"
+    }
     
-    // 2. Unit Test Stage
-    echo "Running Unit Test suites for ${serviceName}..."
-    // sh "cd ${serviceName} && npm test" OR "mvn test" (Uncomment and add your direct test executable here)
-    
-    // 3. Docker Build Stage
-    String imageTag = "${REGISTRY_URL}/${serviceName}:${COMMIT_SHA}"
+    // 3. Docker Build Stage (Runs from workspace root to match relative paths if needed)
+    String imageTag = "${REGISTRY_URL}/${serviceName}:${env.COMMIT_SHA}"
     String latestTag = "${REGISTRY_URL}/${serviceName}:latest"
     
     echo "Building container images for ${serviceName}..."
