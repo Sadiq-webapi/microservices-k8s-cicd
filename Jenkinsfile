@@ -64,24 +64,18 @@ pipeline {
 def buildService(String serviceName) {
     echo "--- Processing ${serviceName} ---"
     
-    // 1 & 2. Run Maven inside the specific service directory using the local pom.xml
     echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
-    dir("${serviceName}") {
-        sh "mvn clean verify"
-    }
+    sh "mvn clean verify -pl :${serviceName} -am"
     
-    // 3. Docker Build Stage (Runs from workspace root to match relative paths if needed)
     String imageTag = "${REGISTRY_URL}/${serviceName}:${env.COMMIT_SHA}"
     String latestTag = "${REGISTRY_URL}/${serviceName}:latest"
     
     echo "Building container images for ${serviceName}..."
     def appImage = docker.build(imageTag, "-f ./infra/docker/${serviceName}/Dockerfile .")
     
-    // 4. Vulnerability Scan Stage (Trivy)
     echo "Scanning ${serviceName} image for critical vulnerabilities..."
     sh "trivy image --exit-code 1 --severity CRITICAL --no-progress ${imageTag}"
     
-    // 5. Push Image Stage
     withCredentials([[
         $class: 'AmazonWebServicesCredentialsBinding', 
         credentialsId: 'aws-credentials', 
@@ -91,10 +85,7 @@ def buildService(String serviceName) {
         echo "Authenticating and pushing image to AWS ECR..."
         sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY_URL}"
         
-        // Push commit SHA tag
         sh "docker push ${imageTag}"
-        
-        // Tag and push latest tag
         sh "docker tag ${imageTag} ${latestTag}"
         sh "docker push ${latestTag}"
     }
