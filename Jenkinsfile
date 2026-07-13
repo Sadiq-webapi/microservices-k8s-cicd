@@ -6,8 +6,6 @@ pipeline {
         AWS_REGION     = 'ap-south-2' // Hyderabad region
         REGISTRY_URL   = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         COMMIT_SHA     = '' 
-        // Ensures Jenkins can find your system's Maven installation paths
-        PATH           = "/usr/bin:/usr/local/bin:${env.PATH}"
     }
     
     options {
@@ -20,7 +18,9 @@ pipeline {
                 cleanWs()
                 checkout scm
                 script {
-                    env.COMMIT_SHA = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    // Replaced sh with bat and wrapped with a clean return token string split for Windows compatibility
+                    def gitCommit = bat(script: "@git rev-parse --short HEAD", returnStdout: true).trim()
+                    env.COMMIT_SHA = gitCommit.lines().drop(1).join().trim() // Drops the printed bat command echo row
                 }
             }
         }
@@ -67,17 +67,19 @@ def buildService(String serviceName) {
     echo "--- Processing ${serviceName} ---"
     
     echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
-    // Fixes 'Unable to find main class' by building from root using module targets
-    sh "mvn clean verify -pl :${serviceName} -am -U"
+    // Changed sh to bat
+    bat "mvn clean verify -pl :${serviceName} -am -U"
     
     String imageTag = "${REGISTRY_URL}/${serviceName}:${env.COMMIT_SHA}"
     String latestTag = "${REGISTRY_URL}/${serviceName}:latest"
     
     echo "Building container images for ${serviceName}..."
-    sh "docker build -t ${imageTag} -f ./infra/docker/${serviceName}/Dockerfile ."
+    // Changed sh to bat
+    bat "docker build -t ${imageTag} -f ./infra/docker/${serviceName}/Dockerfile ."
     
     echo "Scanning ${serviceName} image for critical vulnerabilities..."
-    sh "trivy image --exit-code 1 --severity CRITICAL --no-progress ${imageTag}"
+    // Changed sh to bat
+    bat "trivy image --exit-code 1 --severity CRITICAL --no-progress ${imageTag}"
     
     withCredentials([[
         $class: 'AmazonWebServicesCredentialsBinding', 
@@ -86,10 +88,11 @@ def buildService(String serviceName) {
         secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
     ]]) {
         echo "Authenticating and pushing image to AWS ECR..."
-        sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY_URL}"
+        // Fixed Windows CLI pipe syntax for ECR authentication and changed sh to bat
+        bat "aws ecr get-login-password --region ${AWS_REGION} > ecr_pass.txt && type ecr_pass.txt | docker login --username AWS --password-stdin ${REGISTRY_URL} && del ecr_pass.txt"
         
-        sh "docker push ${imageTag}"
-        sh "docker tag ${imageTag} ${latestTag}"
-        sh "docker push ${latestTag}"
+        bat "docker push ${imageTag}"
+        bat "docker tag ${imageTag} ${latestTag}"
+        bat "docker push ${latestTag}"
     }
 }
