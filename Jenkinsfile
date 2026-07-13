@@ -18,9 +18,10 @@ pipeline {
                 cleanWs()
                 checkout scm
                 script {
-                    // Replaced sh with bat and wrapped with a clean return token string split for Windows compatibility
+                    // Replaced the sandbox-blocked lines() method with a split expression compatible with Windows bat return behavior
                     def gitCommit = bat(script: "@git rev-parse --short HEAD", returnStdout: true).trim()
-                    env.COMMIT_SHA = gitCommit.lines().drop(1).join().trim() // Drops the printed bat command echo row
+                    def lines = gitCommit.split('\r?\n')
+                    env.COMMIT_SHA = lines[lines.length - 1].trim() // Extracts the actual SHA from the last line safely
                 }
             }
         }
@@ -67,18 +68,15 @@ def buildService(String serviceName) {
     echo "--- Processing ${serviceName} ---"
     
     echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
-    // Changed sh to bat
     bat "mvn clean verify -pl :${serviceName} -am -U"
     
     String imageTag = "${REGISTRY_URL}/${serviceName}:${env.COMMIT_SHA}"
     String latestTag = "${REGISTRY_URL}/${serviceName}:latest"
     
     echo "Building container images for ${serviceName}..."
-    // Changed sh to bat
     bat "docker build -t ${imageTag} -f ./infra/docker/${serviceName}/Dockerfile ."
     
     echo "Scanning ${serviceName} image for critical vulnerabilities..."
-    // Changed sh to bat
     bat "trivy image --exit-code 1 --severity CRITICAL --no-progress ${imageTag}"
     
     withCredentials([[
@@ -88,7 +86,6 @@ def buildService(String serviceName) {
         secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
     ]]) {
         echo "Authenticating and pushing image to AWS ECR..."
-        // Fixed Windows CLI pipe syntax for ECR authentication and changed sh to bat
         bat "aws ecr get-login-password --region ${AWS_REGION} > ecr_pass.txt && type ecr_pass.txt | docker login --username AWS --password-stdin ${REGISTRY_URL} && del ecr_pass.txt"
         
         bat "docker push ${imageTag}"
