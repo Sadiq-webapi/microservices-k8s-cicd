@@ -6,7 +6,7 @@ pipeline {
         AWS_REGION     = 'ap-south-2' // Hyderabad region
         REGISTRY_URL   = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         COMMIT_SHA     = '' 
-        // Force Docker CLI on Windows to use the exposed TCP loopback socket
+        // Force Docker commands on Windows to use the exposed TCP loopback port instead of the named pipe
         DOCKER_HOST    = 'tcp://127.0.0.1:2375'
     }
     
@@ -18,10 +18,13 @@ pipeline {
         stage('Code Checkout') {
             steps {
                 cleanWs()
-                checkout scm
+                // Explicitly capture checkout output to populate built-in environment metadata variables
+                def scmVariables = checkout scm
                 script {
-                    // Uses Jenkins' native environment variables safely and grabs the short 7-character substring
-                    if (env.GIT_COMMIT) {
+                    // Pulls the Git commit securely from SCM metadata instead of executing a custom script block
+                    if (scmVariables.GIT_COMMIT) {
+                        env.COMMIT_SHA = scmVariables.GIT_COMMIT.substring(0, 7)
+                    } else if (env.GIT_COMMIT) {
                         env.COMMIT_SHA = env.GIT_COMMIT.substring(0, 7)
                     } else {
                         env.COMMIT_SHA = 'latest'
