@@ -5,7 +5,6 @@ pipeline {
         AWS_ACCOUNT_ID = '385936845313'
         AWS_REGION     = 'ap-south-2' // Hyderabad region
         REGISTRY_URL   = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-        COMMIT_SHA     = '' 
         DOCKER_HOST    = 'tcp://127.0.0.1:2375'
     }
     
@@ -16,22 +15,20 @@ pipeline {
     stages {
         stage('Code Checkout') {
             steps {
-                // Executing checkout first keeps the .git metadata active for parsing
                 script {
+                    // Extracting the SCM metadata immediately on checkout execution
                     def scmVariables = checkout scm
                     
-                    if (scmVariables.GIT_COMMIT) {
+                    if (scmVariables && scmVariables.GIT_COMMIT) {
                         env.COMMIT_SHA = scmVariables.GIT_COMMIT.substring(0, 7)
                     } else if (env.GIT_COMMIT) {
                         env.COMMIT_SHA = env.GIT_COMMIT.substring(0, 7)
                     } else {
-                        // Resilient system level fallback parser for Windows
-                        def rawCommit = bat(script: "@git rev-parse --short HEAD", returnStdout: true).trim()
-                        def lines = rawCommit.split('\r?\n')
-                        env.COMMIT_SHA = lines[lines.length - 1].trim()
+                        env.COMMIT_SHA = 'latest'
                     }
+                    
+                    echo "Successfully resolved pipeline tracking token: ${env.COMMIT_SHA}"
                 }
-                // Wipe out residual target files safely after extracting git metrics
                 cleanWs()
                 checkout scm
             }
@@ -78,13 +75,15 @@ pipeline {
 def buildService(String serviceName) {
     echo "--- Processing ${serviceName} ---"
     
+    // Explicit local lookup configuration to prevent null values leaking inside parallel execution structures
+    String currentCommit = env.COMMIT_SHA ?: 'latest'
+    String imageTag = "${REGISTRY_URL}/${serviceName}:${currentCommit}"
+    String latestTag = "${REGISTRY_URL}/${serviceName}:latest"
+    
     echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
     bat "mvn clean verify -pl :${serviceName} -am -U"
     
-    String imageTag = "${REGISTRY_URL}/${serviceName}:${env.COMMIT_SHA}"
-    String latestTag = "${REGISTRY_URL}/${serviceName}:latest"
-    
-    echo "Building container images for ${serviceName}..."
+    echo "Building container images for ${serviceName} to target tag: ${imageTag}..."
     bat "docker build -t ${imageTag} -f ./infra/docker/${serviceName}/Dockerfile ."
     
     echo "Scanning ${serviceName} image for critical vulnerabilities..."
