@@ -6,7 +6,6 @@ pipeline {
         AWS_REGION     = 'ap-south-2' // Hyderabad region
         REGISTRY_URL   = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         COMMIT_SHA     = '' 
-        // Force Docker commands on Windows to use the exposed TCP loopback port instead of the named pipe
         DOCKER_HOST    = 'tcp://127.0.0.1:2375'
     }
     
@@ -17,18 +16,24 @@ pipeline {
     stages {
         stage('Code Checkout') {
             steps {
-                cleanWs()
-                // Wrapped step execution and assignment inside a valid script block
+                // Executing checkout first keeps the .git metadata active for parsing
                 script {
                     def scmVariables = checkout scm
+                    
                     if (scmVariables.GIT_COMMIT) {
                         env.COMMIT_SHA = scmVariables.GIT_COMMIT.substring(0, 7)
                     } else if (env.GIT_COMMIT) {
                         env.COMMIT_SHA = env.GIT_COMMIT.substring(0, 7)
                     } else {
-                        env.COMMIT_SHA = 'latest'
+                        // Resilient system level fallback parser for Windows
+                        def rawCommit = bat(script: "@git rev-parse --short HEAD", returnStdout: true).trim()
+                        def lines = rawCommit.split('\r?\n')
+                        env.COMMIT_SHA = lines[lines.length - 1].trim()
                     }
                 }
+                // Wipe out residual target files safely after extracting git metrics
+                cleanWs()
+                checkout scm
             }
         }
         
