@@ -6,6 +6,8 @@ pipeline {
         AWS_REGION     = 'ap-south-2' // Hyderabad region
         REGISTRY_URL   = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         COMMIT_SHA     = '' 
+        // Force Docker CLI on Windows to use the exposed TCP loopback socket
+        DOCKER_HOST    = 'tcp://127.0.0.1:2375'
     }
     
     options {
@@ -18,10 +20,12 @@ pipeline {
                 cleanWs()
                 checkout scm
                 script {
-                    // Replaced the sandbox-blocked lines() method with a split expression compatible with Windows bat return behavior
-                    def gitCommit = bat(script: "@git rev-parse --short HEAD", returnStdout: true).trim()
-                    def lines = gitCommit.split('\r?\n')
-                    env.COMMIT_SHA = lines[lines.length - 1].trim() // Extracts the actual SHA from the last line safely
+                    // Uses Jenkins' native environment variables safely and grabs the short 7-character substring
+                    if (env.GIT_COMMIT) {
+                        env.COMMIT_SHA = env.GIT_COMMIT.substring(0, 7)
+                    } else {
+                        env.COMMIT_SHA = 'latest'
+                    }
                 }
             }
         }
