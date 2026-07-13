@@ -18,10 +18,9 @@ pipeline {
         stage('Code Checkout') {
             steps {
                 cleanWs()
-                // Explicitly capture checkout output to populate built-in environment metadata variables
-                def scmVariables = checkout scm
+                // Wrapped step execution and assignment inside a valid script block
                 script {
-                    // Pulls the Git commit securely from SCM metadata instead of executing a custom script block
+                    def scmVariables = checkout scm
                     if (scmVariables.GIT_COMMIT) {
                         env.COMMIT_SHA = scmVariables.GIT_COMMIT.substring(0, 7)
                     } else if (env.GIT_COMMIT) {
