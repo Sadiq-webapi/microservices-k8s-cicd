@@ -82,13 +82,12 @@ def buildService(String serviceName) {
     echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
     bat "mvn clean verify -pl :${serviceName} -am -U"
     
-    echo "Building container images for ${serviceName} to target tag: ${imageTag}..."
-    bat "docker build -t ${imageTag} -f ./${serviceName}/Dockerfile ./${serviceName}"
-    
-   // echo "Scanning ${serviceName} image for critical vulnerabilities..."
-   // bat "trivy image --exit-code 1 --severity CRITICAL --no-progress ${imageTag}"
-    
-    withCredentials([[
+   echo "Building container images for ${serviceName} to target tag: ${imageTag}..."
+bat "docker build -t ${imageTag} -f ./${serviceName}/Dockerfile ./${serviceName}"
+
+echo "Skipping Trivy image scan."
+
+withCredentials([
         $class: 'AmazonWebServicesCredentialsBinding', 
         credentialsId: 'aws-credentials', 
         accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
