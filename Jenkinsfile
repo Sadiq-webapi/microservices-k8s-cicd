@@ -116,44 +116,43 @@ def buildService(String serviceName) {
     stage("Build ${serviceName}") {
 
         echo "Running Maven Build..."
-
         bat "mvn clean verify -pl :${serviceName} -am -U"
 
         echo "Building Docker Image..."
-
         bat "docker build -t ${imageTag} -f ./${serviceName}/Dockerfile ./${serviceName}"
 
         echo "Skipping Trivy Scan"
 
-     withCredentials([
-   withCredentials([
-    string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
-    string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
-]) {
+        withCredentials([
+            string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
+            string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
+        ]) {
 
-    echo "Configuring AWS CLI..."
+            echo "Configuring AWS CLI..."
 
-    bat """
-        aws configure set aws_access_key_id %AWS_ACCESS_KEY_ID%
-        aws configure set aws_secret_access_key %AWS_SECRET_ACCESS_KEY%
-        aws configure set default.region ${env.AWS_REGION}
-    """
+            bat """
+                aws configure set aws_access_key_id %AWS_ACCESS_KEY_ID%
+                aws configure set aws_secret_access_key %AWS_SECRET_ACCESS_KEY%
+                aws configure set default.region ${env.AWS_REGION}
+            """
 
-    echo "Logging into Amazon ECR..."
+            echo "Logging into Amazon ECR..."
 
-    bat """
-        aws ecr get-login-password --region ${env.AWS_REGION} > ecr_pass.txt
-        type ecr_pass.txt | docker login --username AWS --password-stdin ${env.REGISTRY_URL}
-        del ecr_pass.txt
-    """
+            bat """
+                aws ecr get-login-password --region ${env.AWS_REGION} > ecr_pass.txt
+                type ecr_pass.txt | docker login --username AWS --password-stdin ${env.REGISTRY_URL}
+                del ecr_pass.txt
+            """
 
-    echo "Pushing Docker Image..."
+            echo "Pushing Docker Image..."
 
-    bat "docker push ${imageTag}"
+            bat "docker push ${imageTag}"
 
-    bat "docker tag ${imageTag} ${latestTag}"
+            bat "docker tag ${imageTag} ${latestTag}"
 
-    bat "docker push ${latestTag}"
+            bat "docker push ${latestTag}"
+        }
+
+        echo "${serviceName} completed successfully."
+    }
 }
-
-echo "${serviceName} completed successfully."
