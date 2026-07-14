@@ -11,28 +11,21 @@ pipeline {
         timeout(time: 1, unit: 'HOURS')
     }
     
-    stages {
-        stage('Code Checkout') {
-            steps {
-                script {
-                    // Extracting the SCM metadata immediately on checkout execution
-                    def scmVariables = checkout scm
-                    
-                    if (scmVariables && scmVariables.GIT_COMMIT) {
-                        env.COMMIT_SHA = scmVariables.GIT_COMMIT.substring(0, 7)
-                    } else if (env.GIT_COMMIT) {
-                        env.COMMIT_SHA = env.GIT_COMMIT.substring(0, 7)
-                    } else {
-                        env.COMMIT_SHA = 'latest'
-                    }
-                    
-                    echo "Successfully resolved pipeline tracking token: ${env.COMMIT_SHA}"
-                }
-                cleanWs()
-                checkout scm
-            }
+  stage('Code Checkout') {
+    steps {
+        cleanWs()
+        checkout scm
+
+        script {
+            env.COMMIT_SHA = bat(
+                script: '@git rev-parse --short HEAD',
+                returnStdout: true
+            ).trim()
+
+            echo "Commit SHA: ${env.COMMIT_SHA}"
         }
-        
+    }
+}
         stage('Parallel Microservice Build & Verify') {
             parallel {
                 stage('User Service') {
@@ -72,32 +65,42 @@ pipeline {
 }
 
 def buildService(String serviceName) {
+
     echo "--- Processing ${serviceName} ---"
-    
-    // Explicit local lookup configuration to prevent null values leaking inside parallel execution structures
+
     String currentCommit = env.COMMIT_SHA ?: 'latest'
     String imageTag = "${REGISTRY_URL}/${serviceName}:${currentCommit}"
     String latestTag = "${REGISTRY_URL}/${serviceName}:latest"
-    
+
     echo "Compiling, testing, and packaging dependencies for ${serviceName}..."
     bat "mvn clean verify -pl :${serviceName} -am -U"
-    
-   echo "Building container images for ${serviceName} to target tag: ${imageTag}..."
-bat "docker build -t ${imageTag} -f ./${serviceName}/Dockerfile ./${serviceName}"
 
-echo "Skipping Trivy image scan."
+    echo "Building container image for ${serviceName}..."
+    bat "docker build -t ${imageTag} -f ./${serviceName}/Dockerfile ./${serviceName}"
 
-withCredentials([
-        $class: 'AmazonWebServicesCredentialsBinding', 
-        credentialsId: 'aws-credentials', 
-        accessKeyVariable: 'AWS_ACCESS_KEY_ID', 
+    echo "Skipping Trivy image scan."
+
+    withCredentials([[
+        $class: 'AmazonWebServicesCredentialsBinding',
+        credentialsId: 'aws-credentials',
+        accessKeyVariable: 'AWS_ACCESS_KEY_ID',
         secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
     ]]) {
-        echo "Authenticating and pushing image to AWS ECR..."
-        bat "aws ecr get-login-password --region ${AWS_REGION} > ecr_pass.txt && type ecr_pass.txt | docker login --username AWS --password-stdin ${REGISTRY_URL} && del ecr_pass.txt"
-        
+
+        echo "Logging into Amazon ECR..."
+        bat """
+            aws ecr get-login-password --region ${AWS_REGION} > ecr_pass.txt
+            type ecr_pass.txt | docker login --username AWS --password-stdin ${REGISTRY_URL}
+            del ecr_pass.txt
+        """
+
+        echo "Pushing ${serviceName} image..."
         bat "docker push ${imageTag}"
+
         bat "docker tag ${imageTag} ${latestTag}"
+
         bat "docker push ${latestTag}"
     }
+
+    echo "${serviceName} completed successfully."
 }
