@@ -62,7 +62,6 @@ pipeline {
             emailext body: "Something went wrong during the build phase. Investigation required: ${env.BUILD_URL}", subject: "FAILED: ${env.JOB_NAME}", to: 'admin@yourcompany.com'
         }
     }
-}
 
 def buildService(String serviceName) {
 
