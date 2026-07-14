@@ -5,7 +5,6 @@ pipeline {
         AWS_ACCOUNT_ID = '385936845313'
         AWS_REGION     = 'ap-south-2' // Hyderabad region
         REGISTRY_URL   = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-        DOCKER_HOST    = 'tcp://127.0.0.1:2375'
     }
     
     options {
