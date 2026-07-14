@@ -125,30 +125,35 @@ def buildService(String serviceName) {
 
         echo "Skipping Trivy Scan"
 
-        withCredentials([[
-            $class: 'AmazonWebServicesCredentialsBinding',
-            credentialsId: 'aws-credentials',
-            accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-            secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-        ]]) {
+     withCredentials([
+   withCredentials([
+    string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
+    string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
+]) {
 
-            echo "Logging into Amazon ECR..."
+    echo "Configuring AWS CLI..."
 
-            bat """
-                aws ecr get-login-password --region ${env.AWS_REGION} > ecr_pass.txt
-                type ecr_pass.txt | docker login --username AWS --password-stdin ${env.REGISTRY_URL}
-                del ecr_pass.txt
-            """
+    bat """
+        aws configure set aws_access_key_id %AWS_ACCESS_KEY_ID%
+        aws configure set aws_secret_access_key %AWS_SECRET_ACCESS_KEY%
+        aws configure set default.region ${env.AWS_REGION}
+    """
 
-            echo "Pushing Image..."
+    echo "Logging into Amazon ECR..."
 
-            bat "docker push ${imageTag}"
+    bat """
+        aws ecr get-login-password --region ${env.AWS_REGION} > ecr_pass.txt
+        type ecr_pass.txt | docker login --username AWS --password-stdin ${env.REGISTRY_URL}
+        del ecr_pass.txt
+    """
 
-            bat "docker tag ${imageTag} ${latestTag}"
+    echo "Pushing Docker Image..."
 
-            bat "docker push ${latestTag}"
-        }
+    bat "docker push ${imageTag}"
 
-        echo "${serviceName} completed successfully."
-    }
+    bat "docker tag ${imageTag} ${latestTag}"
+
+    bat "docker push ${latestTag}"
 }
+
+echo "${serviceName} completed successfully."
