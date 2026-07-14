@@ -139,9 +139,7 @@ def buildService(String serviceName) {
             echo "Logging into Amazon ECR..."
 
             bat """
-                aws ecr get-login-password --region ${env.AWS_REGION} > ecr_pass.txt
-                type ecr_pass.txt | docker login --username AWS --password-stdin ${env.REGISTRY_URL}
-                del ecr_pass.txt
+              aws ecr get-login-password --region %AWS_REGION% | docker login --username AWS --password-stdin %REGISTRY_URL%
             """
 
             echo "Pushing Docker Image..."
